@@ -8,7 +8,7 @@
     "opensquad": "bin/opensquad.js"
   },
   "scripts": {
-    "test": "node --test tests/*.test.js",
+    "test": "node --test tests",
     "lint": "eslint src/ bin/ tests/",
     "version": "node -e \"require('fs').writeFileSync('templates/_opensquad/.opensquad-version', require('./package.json').version + '\\n')\" && git add templates/_opensquad/.opensquad-version"
   },

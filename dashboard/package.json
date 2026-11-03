@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/*.test.cjs",
+    "test": "node --test tests",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
