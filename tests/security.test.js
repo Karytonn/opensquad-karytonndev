@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, mkdir, rm, readdir, symlink } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, mkdir, rm, readdir, realpath, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { migrateMemory, resolveInput } from '../_opensquad/scripts/runtime.mjs';
+import { containedPath, migrateMemory, resolveInput } from '../_opensquad/scripts/runtime.mjs';
 import { main, readValidatedImage, createChildContainer } from '../skills/instagram-publisher/scripts/publish.js';
 import { installSkill } from '../src/skills.js';
 import { mergeSecurityIgnores } from '../src/security.js';
@@ -40,12 +40,18 @@ test('input resolution selects newest non-empty version only in current run and 
   await writeFile(join(base, 'v2', 'draft.md'), 'new');
   await writeFile(join(base, 'v10', 'draft.md'), '');
   await writeFile(join(base, 'focus.md'), 'checkpoint');
-  assert.equal(await resolveInput(dir, 'demo', run, 'squads/demo/output/draft.md'), join(base, 'v2', 'draft.md'));
-  assert.equal(await resolveInput(dir, 'demo', run, 'squads/demo/output/focus.md'), join(base, 'focus.md'));
+  assert.equal(await resolveInput(dir, 'demo', run, 'squads/demo/output/draft.md'), await realpath(join(base, 'v2', 'draft.md')));
+  assert.equal(await resolveInput(dir, 'demo', run, 'squads/demo/output/focus.md'), await realpath(join(base, 'focus.md')));
   await assert.rejects(resolveInput(dir, '../other', run, 'x'));
   await assert.rejects(resolveInput(dir, 'demo', run, 'squads/demo/output/../../secret'));
   await assert.rejects(resolveInput(dir, 'demo', run, 'C:/secret'));
   await assert.rejects(resolveInput(dir, 'demo', run, 'squads/demo/output/missing.md'));
+});
+
+test('Windows path aliases resolve to the same root without weakening containment', { skip: process.platform !== 'win32' }, async t => {
+  const dir = await workspace(t);
+  assert.equal(await containedPath(dir.toUpperCase(), join(dir.toUpperCase(), 'new.txt')), join(await realpath(dir), 'new.txt'));
+  await assert.rejects(containedPath(dir, join(dir, '..', 'outside.txt')));
 });
 
 test('offline dry-run works without credentials or any network access; wrong modes cannot upload', async t => {

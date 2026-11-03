@@ -13,12 +13,15 @@ export function validateSquadCode(code) {
   }
 }
 
-// Reject symlinks/junctions as well as lexical traversal, including existing ancestors.
+// Canonicalize the selected root (including Windows short names/case aliases),
+// then reject traversal and symlinks/junctions below that root.
 export async function containedPath(root, target) {
   root = resolve(root);
   target = resolve(target);
   const rel = relative(root, target);
   if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) throw new Error('Path outside allowed directory');
+  try { root = await realpath(root); } catch (err) { if (err.code !== 'ENOENT') throw err; }
+  target = resolve(root, rel);
   let current = root;
   for (const part of ['', ...rel.split(sep).filter(Boolean)]) {
     current = part ? join(current, part) : current;
@@ -28,12 +31,6 @@ export async function containedPath(root, target) {
     } catch (err) {
       if (err.code !== 'ENOENT') throw err;
     }
-  }
-  // Resolving the root detects a symlink in any of its ancestors.
-  try {
-    if (await realpath(root) !== root) throw new Error('Root must be a canonical path');
-  } catch (err) {
-    if (err.code !== 'ENOENT') throw err;
   }
   return target;
 }
