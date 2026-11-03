@@ -6,6 +6,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import { watch as chokidarWatch } from "chokidar";
 import path from "node:path";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { parse as parseYaml } from "yaml";
 import type { SquadInfo, SquadState, WsMessage } from "../types/state";
 
@@ -124,22 +125,46 @@ function broadcast(wss: WebSocketServer, msg: WsMessage) {
   }
 }
 
-export function squadWatcherPlugin(): Plugin {
+export function squadWatcherPlugin(options: { squadsDir?: string; token?: string } = {}): Plugin {
+  const token = options.token ?? randomBytes(32).toString("hex");
+  function tokenMatches(value: unknown): boolean {
+    if (typeof value !== "string") return false;
+    const given = Buffer.from(value);
+    const expected = Buffer.from(token);
+    return given.length === expected.length && timingSafeEqual(given, expected);
+  }
   return {
     name: "squad-watcher",
+    transformIndexHtml() {
+      return [{ tag: "meta", attrs: { name: "opensquad-token", content: token }, injectTo: "head" }];
+    },
     configureServer(server: ViteDevServer) {
       if (!server.httpServer) {
         server.config.logger.warn("[squad-watcher] no httpServer — skipping");
         return;
       }
 
-      const squadsDir = resolveSquadsDir();
+      const squadsDir = options.squadsDir ?? resolveSquadsDir();
       server.config.logger.info(`[squad-watcher] squads dir: ${squadsDir}`);
 
+      function trustedRequest(req: IncomingMessage, requireOrigin = false): boolean {
+        const host = req.headers.host;
+        if (!host || !["localhost", "127.0.0.1", "[::1]"].some(h => host === `${h}:${req.socket.localPort}`)) return false;
+        const origin = req.headers.origin;
+        const protocol = server.config.server.https ? "https" : "http";
+        return origin === `${protocol}://${host}` || (!requireOrigin && origin === undefined);
+      }
+
       // Create WebSocket server with noServer to avoid intercepting Vite's HMR
-      const wss = new WebSocketServer({ noServer: true });
+      const wss = new WebSocketServer({ noServer: true, maxPayload: 1024, maxFragments: 32, maxBufferedChunks: 32 });
       (server.httpServer as Server).on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
-        if (req.url === "/__squads_ws") {
+        const url = new URL(req.url ?? "/", "http://localhost");
+        if (url.pathname === "/__squads_ws") {
+          if (!trustedRequest(req, true) || !tokenMatches(url.searchParams.get("token")) || wss.clients.size >= 32) {
+            socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+            socket.destroy();
+            return;
+          }
           wss.handleUpgrade(req, socket, head, (ws) => {
             wss.emit("connection", ws, req);
           });
@@ -149,6 +174,7 @@ export function squadWatcherPlugin(): Plugin {
 
       // Send snapshot on new connection
       wss.on("connection", async (ws) => {
+        ws.on("error", () => ws.terminate());
         try {
           const snap = await buildSnapshot(squadsDir);
           ws.send(JSON.stringify(snap));
@@ -164,11 +190,23 @@ export function squadWatcherPlugin(): Plugin {
 
       // REST API fallback — serves snapshot over HTTP for polling clients
       server.middlewares.use(async (req, res, next) => {
+        // Protect HTML delivery against DNS rebinding too: it contains the session token.
+        if (!trustedRequest(req)) {
+          res.writeHead(403);
+          res.end("Forbidden");
+          return;
+        }
         if (req.url !== "/api/snapshot") return next();
+        if (req.method !== "GET" || !tokenMatches(req.headers["x-opensquad-token"])) {
+          res.writeHead(403);
+          res.end("Forbidden");
+          return;
+        }
         try {
           const snapshot = await buildSnapshot(squadsDir);
           res.setHeader("Content-Type", "application/json");
-          res.setHeader("Cache-Control", "no-cache");
+          res.setHeader("Cache-Control", "no-store");
+          res.setHeader("X-Content-Type-Options", "nosniff");
           res.end(JSON.stringify(snapshot));
         } catch {
           res.writeHead(500);
@@ -201,7 +239,7 @@ export function squadWatcherPlugin(): Plugin {
             // Invalid JSON — next change event will retry
           });
         } else if (fileName === "squad.yaml") {
-          buildSnapshot(squadsDir).then((snap) => broadcast(wss, snap));
+          buildSnapshot(squadsDir).then((snap) => broadcast(wss, snap)).catch(() => {});
         }
       }
 
@@ -216,7 +254,7 @@ export function squadWatcherPlugin(): Plugin {
         if (fileName === "state.json") {
           broadcast(wss, { type: "SQUAD_INACTIVE", squad: squadName });
         } else if (fileName === "squad.yaml") {
-          buildSnapshot(squadsDir).then((snap) => broadcast(wss, snap));
+          buildSnapshot(squadsDir).then((snap) => broadcast(wss, snap)).catch(() => {});
         }
       }
 
@@ -226,6 +264,8 @@ export function squadWatcherPlugin(): Plugin {
 
       server.httpServer.on("close", () => {
         watcher.close();
+        for (const client of wss.clients) client.terminate();
+        wss.close();
       });
     },
   };

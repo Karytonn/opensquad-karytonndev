@@ -117,7 +117,7 @@ test('update writes new version to .opensquad-version', async () => {
       'utf-8'
     );
     assert.ok(version.trim().length > 0);
-    assert.match(version.trim(), /^\d+\.\d+\.\d+$/);
+    assert.match(version.trim(), /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }

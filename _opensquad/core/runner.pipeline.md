@@ -15,39 +15,13 @@ Before starting execution:
    - Company context from `_opensquad/_memory/company.md`
    - Squad memory from `squads/{name}/_memory/memories.md`
 
-1b. **Memory format migration** — After loading `memories.md`, check whether it uses the new format by scanning for the `## Estilo de Escrita` section header:
-   ```bash
-   [ -f squads/{name}/_memory/memories.md ] && grep -q "## Estilo de Escrita" squads/{name}/_memory/memories.md && echo "NEW_FORMAT" || echo "OLD_FORMAT"
+1b. **Preserve and migrate memory** — run the cross-platform helper from the project root:
    ```
-   - If `NEW_FORMAT` → proceed normally.
-   - If `OLD_FORMAT` (or file is empty / does not exist) → silently migrate before proceeding:
-     a. Write `squads/{name}/_memory/memories.md` with the new empty-sections format (do NOT attempt to salvage content from the old file — reset unconditionally):
-        ```markdown
-        # Squad Memory: {squad-name}
-
-        ## Estilo de Escrita
-
-        ## Design Visual
-
-        ## Estrutura de Conteúdo
-
-        ## Proibições Explícitas
-
-        ## Técnico (específico do squad)
-        ```
-        (Use the squad's display name for `{squad-name}`, and the squad code for `{name}` in file paths — they refer to the same squad.)
-     b. Check if `squads/{name}/_memory/runs.md` exists:
-        ```bash
-        test -f squads/{name}/_memory/runs.md && echo "EXISTS" || echo "MISSING"
-        ```
-        If `MISSING`, create it with:
-        ```markdown
-        # Run History: {squad-name}
-
-        | Data | Run ID | Tema | Output | Resultado |
-        |------|--------|------|--------|-----------|
-        ```
-   - Do NOT inform the user or pause execution for this migration — it is transparent.
+   node _opensquad/scripts/runtime.mjs migrate-memory "{name}"
+   ```
+   It preserves all existing text, adds missing sections, backs up the original before changing it,
+   and creates runs.md only when absent. Report any migration and its backup path to the user.
+   If the helper fails, stop; never reset or overwrite memory as a fallback.
 
 2. Read `squads/{name}/pipeline/pipeline.yaml` for the pipeline definition
 3. **Resolve skills**: Read `squad.yaml` → `skills` section. For each non-native skill (anything other than web_search, web_fetch):
@@ -56,7 +30,7 @@ Before starting execution:
       - If yes → read `_opensquad/core/skills.engine.md`, follow Operation 2 (Install)
       - If no → **ERROR**: stop pipeline
    b. Read SKILL.md, parse frontmatter for type
-   c. If type: mcp, verify MCP is configured in `.claude/settings.local.json`
+   c. If type: mcp, verify MCP is configured in the active IDE's MCP configuration (read preferences.md; never create Claude configuration for another IDE)
       - If missing → **ERROR**: "Skill '{skill}' MCP not configured. Reinstall the skill."
    All skills must resolve successfully before the pipeline starts (fail fast).
 4. **Model tiers**: Individual steps declare their own `model_tier` in their frontmatter (`fast` or `powerful`), set by the Architect at squad creation time.
@@ -199,7 +173,7 @@ Before saving any output file in a step, apply these rules to determine the fina
 - If the path starts with `squads/{name}/output/`, insert `{run_id}/` immediately after `output/`
   - Example: `squads/carousel/output/slides/draft.md` → `squads/carousel/output/2026-03-03-143022/slides/draft.md`
   - Example: `squads/carousel/output/angles-brief.yaml` → `squads/carousel/output/2026-03-03-143022/angles-brief.yaml`
-- If the path does NOT start with `squads/{name}/output/`, leave it unchanged
+- Reject output paths outside `squads/{name}/output/`. Reject absolute paths, `..` segments, symlinks and junctions. Resolve canonical paths before writing; every output must remain inside the current run directory.
 
 #### Step 2 — Insert version folder
 
@@ -258,7 +232,13 @@ Apply this transformation consistently for every write in this step.
    ```bash
    test -s "{transformed inputFile path}" && echo "VALIDATION:PASS" || echo "VALIDATION:FAIL"
    ```
-   - Apply the Output Path Transformation (Step 1: run_id injection) to the `inputFile` path before running the check.
+   - Resolve the input using the actual generated version, not just run_id injection:
+     ```
+     node _opensquad/scripts/runtime.mjs resolve-input "{name}" "{run_id}" "{inputFile}"
+     ```
+     The helper selects the latest non-empty version in this run, or the unversioned checkpoint file.
+     Use its returned canonical path in the input check and agent prompt. A helper failure is VALIDATION:FAIL.
+     Never fall back to another run or an unversioned file outside this run.
    - If the Bash output contains `VALIDATION:PASS` → proceed to execute the step.
    - If the Bash output contains `VALIDATION:FAIL` → do NOT execute the step. Present to user:
      ```

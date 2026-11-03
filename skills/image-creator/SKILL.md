@@ -16,7 +16,7 @@ description_es: >
   el viewport especificado y captura una screenshot pixel-perfect.
   Motor genérico -- cualquier formato visual se define por el template HTML.
 type: mcp
-version: "1.0.0"
+version: "1.0.1"
 mcp:
   server_name: playwright
 categories: [design, automation, images]
@@ -38,9 +38,10 @@ Use the Visual Renderer when you need to generate production-ready images from H
 
 3. **Start HTTP server** -- Before rendering, start a local HTTP server in the squad's output folder:
    ```bash
-   python -m http.server 8765 --directory "OUTPUT_DIR" &
-   for i in $(seq 1 30); do curl -s http://localhost:8765 > /dev/null 2>&1 && break || sleep 0.1; done
+   python -m http.server 8765 --bind 127.0.0.1 --directory "OUTPUT_DIR"
    ```
+   Run in a background terminal session supported by the host IDE and retain its session/process handle. If the port is occupied, choose another free port; never terminate its owner. Wait for the server readiness message.
+
    Replace OUTPUT_DIR with the actual absolute path to the output folder (quote paths that contain spaces).
 
 4. **Render** -- Use Playwright to:
@@ -50,10 +51,7 @@ Use the Visual Renderer when you need to generate production-ready images from H
 
 5. **Verify** -- Read the screenshot to confirm quality. Re-render if needed.
 
-6. **Stop server** -- After all slides are rendered, stop the HTTP server:
-   ```bash
-   pkill -f "http.server 8765" 2>/dev/null || true
-   ```
+6. **Stop server** -- Stop only the background session/process started in step 3, using its saved handle. Never use pkill, kill-by-port or broad process matching. On Windows, use a hidden background process when a separate process is necessary.
 
 ### Viewport Presets (width x height)
 

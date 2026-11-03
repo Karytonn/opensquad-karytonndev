@@ -17,6 +17,7 @@ export function useSquadSocket() {
   const setSquadInactive = useSquadStore((s) => s.setSquadInactive);
 
   useEffect(() => {
+    const token = document.querySelector<HTMLMetaElement>('meta[name="opensquad-token"]')?.content ?? "";
     let disposed = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
     let reconnectDelay = RECONNECT_BASE_MS;
@@ -52,7 +53,7 @@ export function useSquadSocket() {
       const poll = async () => {
         if (disposed) return;
         try {
-          const res = await fetch("/api/snapshot", { cache: "no-store" });
+          const res = await fetch("/api/snapshot", { cache: "no-store", headers: { "X-Opensquad-Token": token } });
           if (!res.ok || disposed) return;
           const msg: WsMessage = await res.json();
           dispatch(msg);
@@ -78,7 +79,7 @@ export function useSquadSocket() {
 
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const ws = new WebSocket(
-        `${protocol}//${window.location.host}/__squads_ws`,
+        `${protocol}//${window.location.host}/__squads_ws?token=${encodeURIComponent(token)}`,
       );
       wsRef.current = ws;
 

@@ -103,3 +103,7 @@ When running a squad:
 - When switching personas (inline execution), clearly indicate which agent is speaking
 - When using subagents, inform the user that background work is happening
 - After each pipeline run, update the squad's memories.md with key learnings
+
+## Codex execution compatibility
+
+Use available Codex tools instead of assuming Bash, Task or AskUserQuestion exist. Use PowerShell-compatible commands on Windows or cross-platform Node helpers. Use the configured Codex MCP integrations; do not write Claude settings for Codex. Use the available user-input tool, or ask a normal chat question when no interactive selector exists. Read-only maintenance and security reviews do not activate the squad onboarding flow.

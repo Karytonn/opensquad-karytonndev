@@ -1,5 +1,13 @@
 # Security
 
+## Personal fork changes
+
+See [FORK.md](FORK.md) for the protected local dashboard, offline publishing validation,
+safe memory migration, pinned MCP versions, viewer protections and update/backups workflow.
+Existing secrets already tracked in Git are not removed by adding ignore rules; manage them locally.
+No secrets should be supplied through chat. MCP configuration must use the active IDE's supported
+secret/environment mechanism. Skills remain executable code/instructions, not a sandbox.
+
 This document describes how opensquad handles security, privacy, and user data.
 
 ## Browser Sessions (Sherlock Investigator)

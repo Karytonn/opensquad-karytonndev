@@ -1,18 +1,20 @@
 import { cp, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { backupSkill } from './security.js';
+import { containedPath } from '../_opensquad/scripts/runtime.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const BUNDLED_SKILLS_DIR = join(__dirname, '..', 'skills');
 
 const metaCache = new Map();
 
-export async function listInstalled(targetDir) {
+export async function listInstalled(targetDir, { includeBuiltIn = false } = {}) {
   try {
     const skillsDir = join(targetDir, 'skills');
     const entries = await readdir(skillsDir, { withFileTypes: true });
     return entries
-      .filter((e) => e.isDirectory() && e.name !== 'opensquad-skill-creator')
+      .filter((e) => e.isDirectory() && (includeBuiltIn || e.name !== 'opensquad-skill-creator'))
       .map((e) => e.name);
   } catch (err) {
     if (err.code === 'ENOENT') return [];
@@ -30,6 +32,7 @@ export async function listAvailable() {
 }
 
 export async function getSkillMeta(id) {
+  validateSkillId(id);
   if (metaCache.has(id)) return metaCache.get(id);
   try {
     const raw = await readFile(join(BUNDLED_SKILLS_DIR, id, 'SKILL.md'), 'utf-8');
@@ -109,6 +112,12 @@ export async function installSkill(id, targetDir) {
   if (resolvedSrc === resolvedDest || resolvedDest.startsWith(resolvedSrc + sep)) {
     return;
   }
+  await containedPath(targetDir, destDir);
+  try {
+    await stat(destDir);
+    const backup = await backupSkill(id, targetDir, destDir);
+    console.log(`  Skill backup: ${backup}`);
+  } catch (err) { if (err.code !== 'ENOENT') throw err; }
   await cp(srcDir, destDir, { recursive: true });
   metaCache.delete(id);
 }
@@ -116,6 +125,7 @@ export async function installSkill(id, targetDir) {
 export async function removeSkill(id, targetDir) {
   validateSkillId(id);
   const skillDir = join(targetDir, 'skills', id);
+  await containedPath(targetDir, skillDir);
   await rm(skillDir, { recursive: true, force: true });
   metaCache.delete(id);
 }
@@ -125,9 +135,10 @@ export function clearMetaCache() {
 }
 
 export async function getSkillVersion(id, targetDir) {
+  validateSkillId(id);
   try {
     const skillPath = join(targetDir, 'skills', id, 'SKILL.md');
-    const content = await readFile(skillPath, 'utf-8');
+    const content = (await readFile(skillPath, 'utf-8')).replace(/\r\n/g, '\n');
     const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
     if (!fmMatch) return null;
     const versionMatch = fmMatch[1].match(/^version:\s*(.+)$/m);

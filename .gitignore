@@ -8,8 +8,19 @@ _opensquad/_browser_profile/
 docs/
 .superpowers/
 temp/
-tests/
 test-results/
 temp/squads/
 .claude/settings.local.json
 dashboards/test-results/
+
+# Local credentials, session data and generated backups
+.env.*
+!.env.example
+*.bak
+*.tmp
+__pycache__/
+*.pyc
+.claude/settings.local.json
+.codex/auth.json
+_opensquad/_backups/
+_opensquad/_browser_profile/

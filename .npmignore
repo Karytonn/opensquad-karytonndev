@@ -5,3 +5,17 @@ temp/squads/
 dashboards/test-results/
 docs/
 .github/
+.env
+.env.*
+!.env.example
+*.bak
+*.tmp
+__pycache__/
+*.pyc
+_opensquad/_memory/
+_opensquad/_browser_profile/
+_opensquad/_backups/
+_opensquad/logs/
+dashboard/dist/
+dashboard/tests/
+dashboard/test-results/

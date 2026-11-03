@@ -13,11 +13,11 @@ description_es: >
   ejecuta scrapers prediseñados (Actors) y automatiza flujos de trabajo web
   con miles de herramientas de la Apify Store.
 type: mcp
-version: "1.0.0"
+version: "1.0.1"
 mcp:
   server_name: apify
   command: npx
-  args: ["-y", "@apify/actors-mcp-server@latest"]
+  args: ["-y", "@apify/actors-mcp-server@0.20.1"]
 env:
   - APIFY_TOKEN
 categories: [scraping, data, automation]

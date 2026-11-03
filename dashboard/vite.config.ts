@@ -4,6 +4,8 @@ import path from "node:path";
 import { squadWatcherPlugin } from "./src/plugin/squadWatcher";
 
 export default defineConfig({
+  server: { host: "127.0.0.1" },
+  preview: { host: "127.0.0.1" },
   plugins: [react(), squadWatcherPlugin()],
   resolve: {
     alias: {

@@ -1,6 +1,7 @@
 ---
 name: opensquad-skill-creator
-description: Create new Opensquad skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill for their squads, update or optimize an existing skill, run evals to test a skill, or benchmark skill performance. Supports all Opensquad skill types: MCP integrations, custom scripts, hybrid, and behavioral prompts.
+description: >
+  Create new Opensquad skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill for their squads, update or optimize an existing skill, run evals to test a skill, or benchmark skill performance. Supports all Opensquad skill types: MCP integrations, custom scripts, hybrid, and behavioral prompts.
 ---
 
 # Opensquad Skill Creator

@@ -91,13 +91,13 @@ Every platform has specific constraints that must be validated before making any
    ```
 
 5. **Execute dry-run.** Run the publishing workflow in test mode:
-   - Instagram: `--dry-run` flag on the publish script
+   - Instagram: `--dry-run` is offline validation only. Credentials and uploads are not tested. Use `--integration-test --allow-public-upload` only after explicit consent for public hosting
    - Blotato: validate API connection and media upload without posting
-   - Report dry-run results: credentials OK, media uploaded, container created, ready to publish.
+   - Report dry-run results: local validation passed, or (only for an authorized integration test) credentials checked, media uploaded and container created.
 
 6. **Request final confirmation.** Present the dry-run results and ask the user to confirm the live publish. Do not proceed without explicit approval.
 
-7. **Publish and report.** Execute the live publish. Report the result immediately:
+7. **Publish and report.** Execute the live publish using `--publish --allow-public-upload`. Report the result immediately:
    - Success: post URL, post ID, platform, timestamp
    - Failure: error details, suggested fix, option to retry
 
