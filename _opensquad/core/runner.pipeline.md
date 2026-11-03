@@ -15,7 +15,7 @@ Before starting execution:
    - Company context from `_opensquad/_memory/company.md`
    - Squad memory from `squads/{name}/_memory/memories.md`
 
-1b. **Preserve and migrate memory** ? run the cross-platform helper from the project root:
+1b. **Preserve and migrate memory** — run the cross-platform helper from the project root:
    ```
    node _opensquad/scripts/runtime.mjs migrate-memory "{name}"
    ```
