@@ -16,11 +16,11 @@ description_es: >
   contenedores de medios vía Graph API y publica el carrusel.
   Soporta de 2 a 10 imágenes por post y obtiene el permalink real.
 type: script
-version: "1.0.0"
+version: "1.0.1"
 script:
   path: scripts/publish.js
   runtime: node
-  invoke: "node --env-file=.env {skill_path}/scripts/publish.js --images \"{images}\" --caption \"{caption}\""
+  invoke: "node --env-file=.env {skill_path}/scripts/publish.js --images \"{images}\" --caption \"{caption}\" --dry-run"
 env:
   - INSTAGRAM_ACCESS_TOKEN
   - INSTAGRAM_USER_ID
@@ -45,13 +45,13 @@ Use the Instagram Publisher when you need to publish carousel posts directly to 
 3. Extract the caption from the content draft:
    - Use the hook slide text + CTA slide text
    - Max 2200 characters (Instagram limit)
-4. Run the publish script:
+4. Run offline validation first. Before any upload, show the target account, full caption and images and obtain explicit approval. For live publication, use:
    ```
-   node --env-file=.env squads/{squad}/tools/publish.js \
+   node --env-file=.env skills/instagram-publisher/scripts/publish.js \
      --images "<comma-separated-ordered-paths>" \
-     --caption "<caption>"
+     --caption "<caption>" --publish --allow-public-upload
    ```
-   Add `--dry-run` to test the full flow without actually publishing.
+   For offline validation, replace both live flags with `--dry-run`. For an explicitly authorized upload/container test, use `--integration-test --allow-public-upload` instead. Pass these arguments as an array, not a shell-expanded caption.
 5. On success: save the post URL and post ID to the step output file.
 6. On failure: display the error and ask the user how to proceed.
 
@@ -117,3 +117,12 @@ Pré-requisito: conta Instagram Business conectada a uma Página do Facebook, e 
 - **Dry Run** -- Test the full publishing flow without actually posting (use `--dry-run` flag)
 - **Image Upload** -- Upload local JPEG images to imgBB (requires API key)
 - **Status Check** -- Monitor media container processing status before publishing
+
+## Execution modes (required)
+
+- `--dry-run`: local JPEG/path/size validation only; no credentials, uploads or API calls.
+- `--integration-test --allow-public-upload`: explicitly authorized public uploads and Meta container creation; no final publication.
+- `--publish --allow-public-upload`: publish only after user approval of account, images and complete caption.
+- Every invocation must select exactly one mode. Default allowed image root is `squads/`; use `--images-root` only for an explicitly selected dedicated image folder.
+- imgBB uploads expire after one hour. Do not upload confidential material.
+- Invoke `skills/instagram-publisher/scripts/publish.js` directly using an argument array; do not copy scripts to the squad or interpolate a caption into a shell command.

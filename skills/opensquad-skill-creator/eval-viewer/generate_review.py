@@ -16,13 +16,11 @@ import argparse
 import base64
 import json
 import mimetypes
-import os
 import re
-import signal
-import subprocess
 import sys
-import time
+import secrets
 import webbrowser
+from urllib.parse import urlsplit
 from functools import partial
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
@@ -78,7 +76,7 @@ def _find_runs_recursive(root: Path, current: Path, runs: list[dict]) -> None:
 
     skip = {"node_modules", ".git", "__pycache__", "skill", "inputs"}
     for child in sorted(current.iterdir()):
-        if child.is_dir() and child.name not in skip:
+        if child.is_dir() and not child.is_symlink() and child.name not in skip:
             _find_runs_recursive(root, child, runs)
 
 
@@ -121,9 +119,9 @@ def build_run(root: Path, run_dir: Path) -> dict | None:
     # Collect output files
     outputs_dir = run_dir / "outputs"
     output_files: list[dict] = []
-    if outputs_dir.is_dir():
+    if outputs_dir.is_dir() and not outputs_dir.is_symlink():
         for f in sorted(outputs_dir.iterdir()):
-            if f.is_file() and f.name not in METADATA_FILES:
+            if f.is_file() and not f.is_symlink() and f.name not in METADATA_FILES:
                 output_files.append(embed_file(f))
 
     # Load grading if present
@@ -252,6 +250,7 @@ def generate_html(
     skill_name: str,
     previous: dict[str, dict] | None = None,
     benchmark: dict | None = None,
+    csrf_token: str = "",
 ) -> str:
     """Generate the complete standalone HTML page with embedded data."""
     template_path = Path(__file__).parent / "viewer.html"
@@ -272,11 +271,15 @@ def generate_html(
         "runs": runs,
         "previous_feedback": previous_feedback,
         "previous_outputs": previous_outputs,
+        "csrf_token": csrf_token,
     }
     if benchmark:
         embedded["benchmark"] = benchmark
 
-    data_json = json.dumps(embedded)
+    # JSON escaping alone does not protect the surrounding HTML script element.
+    data_json = json.dumps(embedded).replace("<", "\\u003c").replace(
+        ">", "\\u003e"
+    ).replace("&", "\\u0026")
 
     return template.replace("/*__EMBEDDED_DATA__*/", f"const EMBEDDED_DATA = {data_json};")
 
@@ -284,26 +287,6 @@ def generate_html(
 # ---------------------------------------------------------------------------
 # HTTP server (stdlib only, zero dependencies)
 # ---------------------------------------------------------------------------
-
-def _kill_port(port: int) -> None:
-    """Kill any process listening on the given port."""
-    try:
-        result = subprocess.run(
-            ["lsof", "-ti", f":{port}"],
-            capture_output=True, text=True, timeout=5,
-        )
-        for pid_str in result.stdout.strip().split("\n"):
-            if pid_str.strip():
-                try:
-                    os.kill(int(pid_str.strip()), signal.SIGTERM)
-                except (ProcessLookupError, ValueError):
-                    pass
-        if result.stdout.strip():
-            time.sleep(0.5)
-    except subprocess.TimeoutExpired:
-        pass
-    except FileNotFoundError:
-        print("Note: lsof not found, cannot check if port is in use", file=sys.stderr)
 
 class ReviewHandler(BaseHTTPRequestHandler):
     """Serves the review HTML and handles feedback saves.
@@ -330,6 +313,9 @@ class ReviewHandler(BaseHTTPRequestHandler):
         super().__init__(*args, **kwargs)
 
     def do_GET(self) -> None:
+        if not self.valid_origin():
+            self.send_error(403)
+            return
         if self.path == "/" or self.path == "/index.html":
             # Regenerate HTML on each request (re-scans workspace for new outputs)
             runs = find_runs(self.workspace)
@@ -339,7 +325,8 @@ class ReviewHandler(BaseHTTPRequestHandler):
                     benchmark = json.loads(self.benchmark_path.read_text())
                 except (json.JSONDecodeError, OSError):
                     pass
-            html = generate_html(runs, self.skill_name, self.previous, benchmark)
+            html = generate_html(runs, self.skill_name, self.previous, benchmark,
+                                 self.server.csrf_token)
             content = html.encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -359,8 +346,23 @@ class ReviewHandler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self) -> None:
+        if not self.valid_origin() or not secrets.compare_digest(
+            self.headers.get("X-Review-Token", ""), self.server.csrf_token
+        ):
+            self.send_error(403)
+            return
         if self.path == "/api/feedback":
-            length = int(self.headers.get("Content-Length", 0))
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                self.send_error(400)
+                return
+            if not 0 < length <= 1_048_576:
+                self.send_error(413)
+                return
+            if self.headers.get_content_type() != "application/json":
+                self.send_error(415)
+                return
             body = self.rfile.read(length)
             try:
                 data = json.loads(body)
@@ -378,6 +380,21 @@ class ReviewHandler(BaseHTTPRequestHandler):
             self.wfile.write(resp)
         else:
             self.send_error(404)
+
+    def valid_origin(self) -> bool:
+        port = self.server.server_port
+        allowed = {f"localhost:{port}", f"127.0.0.1:{port}"}
+        host = self.headers.get("Host", "")
+        origin = self.headers.get("Origin")
+        if host not in allowed:
+            return False
+        if origin is None:
+            return True
+        try:
+            parsed = urlsplit(origin)
+            return parsed.scheme == "http" and parsed.netloc == host
+        except ValueError:
+            return False
 
     def log_message(self, format: str, *args: object) -> None:
         # Suppress request logging to keep terminal clean
@@ -435,16 +452,16 @@ def main() -> None:
         print(f"\n  Static viewer written to: {args.static}\n")
         sys.exit(0)
 
-    # Kill any existing process on the target port
+    # An occupied port belongs to its owner; select a free port instead.
     port = args.port
-    _kill_port(port)
     handler = partial(ReviewHandler, workspace, skill_name, feedback_path, previous, benchmark_path)
     try:
         server = HTTPServer(("127.0.0.1", port), handler)
     except OSError:
-        # Port still in use after kill attempt — find a free one
+        # Find a free port without touching the existing listener.
         server = HTTPServer(("127.0.0.1", 0), handler)
         port = server.server_address[1]
+    server.csrf_token = secrets.token_urlsafe(32)
 
     url = f"http://localhost:{port}"
     print(f"\n  Eval Viewer")

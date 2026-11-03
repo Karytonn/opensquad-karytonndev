@@ -5,6 +5,9 @@ import { loadLocale, t } from './i18n.js';
 import { getTemplateEntries, loadSavedLocale, copyCanonicalSources } from './init.js';
 import { listAvailable as listAvailableSkills, listInstalled as listInstalledSkills, installSkill, getSkillMeta } from './skills.js';
 import { logEvent } from './logger.js';
+import { mergeSecurityIgnores } from './security.js';
+import { randomUUID } from 'node:crypto';
+import { containedPath } from '../_opensquad/scripts/runtime.mjs';
 
 async function loadSavedIdes(targetDir) {
   try {
@@ -27,6 +30,16 @@ const PROTECTED_PATHS = [
   '_opensquad/_memory',
   'agents',
   'squads',
+  '.gitignore',
+  '.mcp.json',
+  '.claude/settings.local.json',
+  '.codex',
+  '.cursor/mcp.json',
+  '.vscode/mcp.json',
+  '.vscode/settings.json',
+  '.gemini/settings.json',
+  '.qwen/settings.json',
+  '.trae/mcp.json',
 ];
 
 function isProtected(relativePath) {
@@ -39,15 +52,16 @@ function isProtected(relativePath) {
 async function backupIfExists(destPath) {
   try {
     await stat(destPath);
-    const backupPath = destPath + '.bak';
+    const backupPath = `${destPath}.${Date.now()}-${randomUUID()}.bak`;
     await cp(destPath, backupPath);
-    return true;
-  } catch {
-    return false;
+    return backupPath;
+  } catch (err) {
+    if (err.code === 'ENOENT') return false;
+    throw err;
   }
 }
 
-export async function update(targetDir) {
+export async function update(targetDir, { refreshSkills = false } = {}) {
   console.log('\n  🔄 Opensquad — Update\n');
 
   // 1. Check initialized
@@ -61,6 +75,7 @@ export async function update(targetDir) {
 
   // 2. Load user's locale
   await loadSavedLocale(targetDir);
+  await mergeSecurityIgnores(targetDir);
 
   // 3. Read versions
   let currentVersion = null;
@@ -96,12 +111,13 @@ export async function update(targetDir) {
     if (relativePath.replaceAll('\\', '/').startsWith('ide-templates/')) continue;
 
     const destPath = join(targetDir, relativePath);
+    await containedPath(targetDir, destPath);
     await mkdir(dirname(destPath), { recursive: true });
     const backed = await backupIfExists(destPath);
     await cp(entry, destPath);
     const displayPath = relativePath.replaceAll('\\', '/');
     if (backed) {
-      console.log(`  ${t('updatedFile', { path: displayPath })} (backup: ${displayPath}.bak)`);
+      console.log(`  ${t('updatedFile', { path: displayPath })} (backup: ${backed})`);
     } else {
       console.log(`  ${t('updatedFile', { path: displayPath })}`);
     }
@@ -123,6 +139,7 @@ export async function update(targetDir) {
       if (isProtected(relPath)) continue;
 
       const destPath = join(targetDir, relPath);
+      await containedPath(targetDir, destPath);
       await mkdir(dirname(destPath), { recursive: true });
       const backed = await backupIfExists(destPath);
       await cp(entry, destPath);
@@ -145,10 +162,15 @@ export async function update(targetDir) {
 
   // 6b. Install new non-MCP, non-hybrid bundled skills not already present
   const availableSkills = await listAvailableSkills();
-  const installedSkills = await listInstalledSkills(targetDir);
+  const installedSkills = await listInstalledSkills(targetDir, { includeBuiltIn: true });
   for (const id of availableSkills) {
-    if (id === 'opensquad-skill-creator') continue;
-    if (installedSkills.includes(id)) continue;
+    if (installedSkills.includes(id)) {
+      if (refreshSkills) {
+        await installSkill(id, targetDir);
+        count++;
+      }
+      continue;
+    }
     const meta = await getSkillMeta(id);
     if (!meta) continue;
     if (meta.type === 'mcp' || meta.type === 'hybrid') continue;

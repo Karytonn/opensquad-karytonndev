@@ -11,10 +11,10 @@ description_pt-BR: >
   Cuida da construção de prompts, chamadas de API, decodificação base64 e salvamento de arquivos.
   Suporta imagens de referência (logos, mascotes) para geração consistente com a marca.
 type: script
-version: "1.0.0"
+version: "1.0.1"
 script:
   path: scripts/generate.py
-  runtime: python3
+  runtime: python
   invoke: "python3 {skill_path}/scripts/generate.py --prompt \"{prompt}\" --output \"{output}\" --mode \"{mode}\""
 env:
   - OPENROUTER_API_KEY

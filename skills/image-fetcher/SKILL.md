@@ -12,8 +12,8 @@ description_es: >
   Obtiene assets visuales de múltiples fuentes: búsqueda de imágenes en la web,
   capturas de sitios vía Playwright y archivos proporcionados por el usuario.
   Organiza los assets en la carpeta de referencia del squad.
-type: hybrid
-version: "1.0.0"
+type: mcp
+version: "1.0.1"
 mcp:
   server_name: playwright
 categories: [assets, scraping, automation, images]

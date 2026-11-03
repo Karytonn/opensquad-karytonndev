@@ -7,7 +7,8 @@ import { skillsCli } from '../src/skills-cli.js';
 import { agentsCli } from '../src/agents-cli.js';
 import { listRuns, printRuns } from '../src/runs.js';
 
-const { positionals } = parseArgs({
+const { positionals, values } = parseArgs({
+  options: { skills: { type: 'boolean', default: false } },
   allowPositionals: true,
   strict: false,
 });
@@ -32,7 +33,7 @@ if (command === 'init') {
     if (!result.success) process.exitCode = 1;
   } else {
     // npx opensquad update → update core
-    const result = await update(process.cwd());
+    const result = await update(process.cwd(), { refreshSkills: values.skills });
     if (!result.success) process.exitCode = 1;
   }
 } else if (command === 'skills') {
@@ -57,6 +58,7 @@ if (command === 'init') {
   Usage:
     npx opensquad init                    Initialize Opensquad
     npx opensquad update                  Update Opensquad core
+    node /path/to/fork/bin/opensquad.js update --skills   Update bundled skills with backups
     npx opensquad install <name>          Install a skill
     npx opensquad uninstall <name>        Remove a skill
     npx opensquad update <name>           Update a specific skill

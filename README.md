@@ -1,3 +1,7 @@
+# Fork pessoal
+
+Esta cópia inclui correções de segurança e distribuição para uso pessoal. Consulte [FORK.md](FORK.md) para instalar e atualizar a partir deste fork, escolher os modos de publicação e executar as verificações. Os comandos `npx opensquad` no material original abaixo referem-se à distribuição upstream.
+
 # opensquad
 
 Crie squads de agentes de IA que trabalham juntos — direto da sua IDE.

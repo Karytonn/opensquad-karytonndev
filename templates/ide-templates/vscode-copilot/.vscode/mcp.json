@@ -2,7 +2,7 @@
   "servers": {
     "playwright": {
       "command": "npx",
-      "args": ["@playwright/mcp@latest", "--config", "_opensquad/config/playwright.config.json"]
+      "args": ["@playwright/mcp@0.0.84", "--config", "_opensquad/config/playwright.config.json"]
     }
   }
 }

@@ -6,6 +6,8 @@ import { createPrompt } from './prompt.js';
 import { loadLocale, t } from './i18n.js';
 import { listAvailable, installSkill } from './skills.js';
 import { logEvent } from './logger.js';
+import { mergeSecurityIgnores } from './security.js';
+import { containedPath } from '../_opensquad/scripts/runtime.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = join(__dirname, '..', 'templates');
@@ -15,10 +17,11 @@ const PACKAGE_ROOT = join(__dirname, '..');
 const CANONICAL_SOURCES = [
   { src: join(PACKAGE_ROOT, '_opensquad', 'core'), dest: join('_opensquad', 'core') },
   { src: join(PACKAGE_ROOT, '_opensquad', 'config'), dest: join('_opensquad', 'config') },
+  { src: join(PACKAGE_ROOT, '_opensquad', 'scripts'), dest: join('_opensquad', 'scripts') },
   { src: join(PACKAGE_ROOT, 'dashboard'), dest: 'dashboard' },
 ];
 
-const DASHBOARD_EXCLUDES = ['node_modules', 'tsconfig.tsbuildinfo', 'squads'];
+const DASHBOARD_EXCLUDES = ['node_modules', 'tsconfig.tsbuildinfo', 'squads', 'dist', 'tests', 'test-results'];
 
 const LANGUAGES = [
   { label: 'Português (Brasil)', value: 'Português (Brasil)' },
@@ -81,6 +84,7 @@ export async function init(targetDir, options = {}) {
 
   // Copy template files
   await copyCommonTemplates(targetDir);
+  await mergeSecurityIgnores(targetDir);
   await copyCanonicalSources(targetDir);
   await copyIdeTemplates(ides, targetDir);
   await installAllSkills(targetDir);
@@ -321,7 +325,7 @@ async function mergeQwenSettings(targetDir) {
   if (!parsed.mcpServers.playwright) {
     parsed.mcpServers.playwright = {
       command: 'npx',
-      args: ['@playwright/mcp@latest', '--config', '_opensquad/config/playwright.config.json'],
+      args: ['@playwright/mcp@0.0.84', '--config', '_opensquad/config/playwright.config.json'],
     };
   }
 
@@ -361,21 +365,22 @@ async function mergeGeminiSettings(targetDir) {
   if (!parsed.mcpServers.playwright) {
     parsed.mcpServers.playwright = {
       command: 'npx',
-      args: ['@playwright/mcp@latest', '--config', '_opensquad/config/playwright.config.json'],
+      args: ['@playwright/mcp@0.0.84', '--config', '_opensquad/config/playwright.config.json'],
     };
   }
 
   await writeFile(settingsPath, JSON.stringify(parsed, null, 2), 'utf-8');
 }
 
-export async function getTemplateEntries(dir) {
+export async function getTemplateEntries(dir, excludes = []) {
   const results = [];
   const entries = await readdir(dir, { withFileTypes: true });
 
   for (const entry of entries) {
+    if (excludes.includes(entry.name)) continue;
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
-      results.push(...await getTemplateEntries(fullPath));
+      results.push(...await getTemplateEntries(fullPath, excludes));
     } else {
       results.push(fullPath);
     }
@@ -391,7 +396,7 @@ export async function copyCanonicalSources(targetDir, { overwrite = false, backu
     const isDashboard = dest === 'dashboard';
     let entries;
     try {
-      entries = await getTemplateEntries(src);
+      entries = await getTemplateEntries(src, isDashboard ? DASHBOARD_EXCLUDES : []);
     } catch {
       continue; // source dir doesn't exist (e.g., running from a partial install)
     }
@@ -412,6 +417,7 @@ export async function copyCanonicalSources(targetDir, { overwrite = false, backu
       if (protectedFn && protectedFn(normalizedPath)) continue;
 
       const destPath = join(targetDir, relativePath);
+      await containedPath(targetDir, destPath);
       await mkdir(dirname(destPath), { recursive: true });
 
       if (!overwrite) {
@@ -429,7 +435,7 @@ export async function copyCanonicalSources(targetDir, { overwrite = false, backu
         const backed = backupFn ? await backupFn(destPath) : false;
         await cp(entry, destPath);
         if (backed) {
-          console.log(`  ${t('updatedFile', { path: normalizedPath })} (backup: ${normalizedPath}.bak)`);
+          console.log(`  ${t('updatedFile', { path: normalizedPath })} (backup: ${backed})`);
         } else {
           console.log(`  ${t('updatedFile', { path: normalizedPath })}`);
         }

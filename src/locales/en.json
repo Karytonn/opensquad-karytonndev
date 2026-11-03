@@ -26,7 +26,7 @@
   "updateSuccess": "✅ Opensquad {version} installed successfully!",
   "updatePreserved": "✓ Preserved: _memory/, _investigations/, squads/",
   "updateFileCount": "✓ Updated: {count} system files",
-  "updateLatestHint": "💡 Tip: Use 'npx opensquad@latest update' to always get the newest version.",
+  "updateLatestHint": "Fork: update from your reviewed local checkout or an immutable Git commit; do not use upstream opensquad@latest.",
   "skillsNotInitialized": "No Opensquad installation found. Run 'init' first.",
   "skillsFetching": "Fetching skills registry...",
   "skillsInstalledHeader": "Installed:",

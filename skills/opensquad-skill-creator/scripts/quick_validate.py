@@ -4,7 +4,6 @@ Quick validation script for skills - minimal version
 """
 
 import sys
-import os
 import re
 import yaml
 from pathlib import Path
@@ -19,7 +18,7 @@ def validate_skill(skill_path):
         return False, "SKILL.md not found"
 
     # Read and validate frontmatter
-    content = skill_md.read_text()
+    content = skill_md.read_text(encoding='utf-8')
     if not content.startswith('---'):
         return False, "No YAML frontmatter found"
 
@@ -39,7 +38,8 @@ def validate_skill(skill_path):
         return False, f"Invalid YAML in frontmatter: {e}"
 
     # Define allowed properties
-    ALLOWED_PROPERTIES = {'name', 'description', 'license', 'allowed-tools', 'metadata', 'compatibility'}
+    ALLOWED_PROPERTIES = {'name', 'description', 'license', 'allowed-tools', 'metadata', 'compatibility',
+                          'description_pt-BR', 'description_es', 'type', 'version', 'mcp', 'script', 'env', 'categories'}
 
     # Check for unexpected properties (excluding nested keys under metadata)
     unexpected_keys = set(frontmatter.keys()) - ALLOWED_PROPERTIES
@@ -48,6 +48,40 @@ def validate_skill(skill_path):
             f"Unexpected key(s) in SKILL.md frontmatter: {', '.join(sorted(unexpected_keys))}. "
             f"Allowed properties are: {', '.join(sorted(ALLOWED_PROPERTIES))}"
         )
+
+    skill_type = frontmatter.get('type')
+    if skill_type is not None and skill_type not in {'mcp', 'script', 'hybrid', 'prompt'}:
+        return False, 'Invalid skill type'
+    if skill_type is not None and not re.fullmatch(r'\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?', str(frontmatter.get('version', ''))):
+        return False, 'Opensquad skills require a semantic version'
+    for field in ('env', 'categories'):
+        values = frontmatter.get(field, [])
+        if not isinstance(values, list) or not all(isinstance(v, str) for v in values):
+            return False, f'{field} must be a list of strings'
+    if any(not re.fullmatch(r'[A-Z_][A-Z0-9_]*', v) for v in frontmatter.get('env', [])):
+        return False, 'env entries must be environment variable names'
+    if skill_type in {'mcp', 'hybrid'}:
+        mcp = frontmatter.get('mcp')
+        if not isinstance(mcp, dict) or not isinstance(mcp.get('server_name'), str):
+            return False, 'MCP skills require mcp.server_name'
+        transport = mcp.get('transport', 'stdio')
+        if transport not in {'stdio', 'http'}:
+            return False, 'Invalid MCP transport'
+        if transport == 'http' and not str(mcp.get('url', '')).startswith('https://'):
+            return False, 'HTTP MCP servers require an HTTPS URL'
+    if skill_type in {'script', 'hybrid'}:
+        script = frontmatter.get('script')
+        if not isinstance(script, dict) or script.get('runtime') not in {'node', 'python', 'bash'}:
+            return False, 'Invalid script runtime'
+        script_path = script.get('path')
+        if not isinstance(script_path, str) or not script_path:
+            return False, 'script.path is required'
+        normalized = script_path.replace('\\', '/')
+        if normalized.startswith('/') or ':' in normalized or '..' in normalized.split('/'):
+            return False, 'script.path must stay inside the skill directory'
+        resolved = (skill_path / normalized).resolve()
+        if not resolved.is_relative_to(skill_path.resolve()) or not resolved.is_file():
+            return False, 'Script is missing or escapes the skill directory'
 
     # Check required fields
     if 'name' not in frontmatter:

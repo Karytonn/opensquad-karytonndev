@@ -13,11 +13,11 @@ description_es: >
   Soporta envío individual, envío por lotes, cuerpo HTML y texto plano,
   adjuntos, CC/BCC, programación y gestión de contactos.
 type: mcp
-version: "1.0.0"
+version: "1.0.1"
 mcp:
   server_name: resend
   command: npx
-  args: ["-y", "resend-mcp"]
+  args: ["-y", "resend-mcp@2.27.2"]
   transport: stdio
 env:
   - RESEND_API_KEY
