@@ -79,4 +79,4 @@ Monitor your usage in your IDE or AI provider dashboard.
 
 ## Reporting Security Issues
 
-If you find a security vulnerability in opensquad, please open an issue at [github.com/renatoasse/opensquad/issues](https://github.com/renatoasse/opensquad/issues) or contact the maintainer directly.
+Security findings for this personal fork should be reviewed locally with the repository owner. Do not publish credentials, browser sessions or confidential reproductions in issues or commits.

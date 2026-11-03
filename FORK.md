@@ -4,7 +4,7 @@ Este fork mantém a criação de squads, personas, pipelines, checkpoints e inte
 
 ## Usar em outras instalações
 
-1. Clone `https://github.com/Karytonn/opensquad-karytonndev.git` em uma pasta dedicada. Use uma versão/commit revisado. Enquanto esta correção estiver em revisão, selecione a branch `security/personal-fork-hardening`.
+1. Clone `https://github.com/Karytonn/opensquad-karytonndev.git` em uma pasta dedicada, usando `--branch main`. A versão corrigida está consolidada na branch `main`, que é a única branch mantida neste fork.
 2. Na pasta do fork, execute `npm ci --ignore-scripts`.
 3. Abra um terminal na pasta de destino da instalação e execute:
 
